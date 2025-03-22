@@ -68,21 +68,28 @@ def sae_forward_hook(activation, hook):
     else:
         return activation
 
-def hooked_generate(prompt_batch, fwd_hooks=[], seed=None):
-    if seed is not None:
-        torch.manual_seed(seed)
+def hooked_generate(prompt_batch, fwd_hooks=[], max_new_tokens=200):
 
     with model.hooks(fwd_hooks=fwd_hooks):
         tokenized = model.to_tokens(prompt_batch)
-        result = model.generate(
-            stop_at_eos=True,  # avoids a bug on MPS
-            input=tokenized,
-            max_new_tokens=200,
-            do_sample=False,
-        )
-        outputs = model(tokenized)
-        print(f"logits dim: {outputs.shape}")
-    return result
+        input_ids = tokenized.clone()
+
+        for step in range(max_new_tokens):
+            outputs = model(input_ids)
+            logits = outputs[0]  # shape: [1, seq_len, vocab_size]
+            print(f"[Step {step}] logits shape: {logits.shape}")
+
+            next_token_logits = logits[:, -1, :]
+
+            next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+
+            input_ids = torch.cat([input_ids, next_token], dim=-1)
+
+            if next_token.item() == model.tokenizer.eos_token_id:
+                break
+                
+    output_text = model.to_string(input_ids[0])   
+    return output_text
 
 def run_generate(messages):
     model.reset_hooks()
