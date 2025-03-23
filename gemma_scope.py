@@ -18,7 +18,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 # access_token = "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"
 
-model = HookedTransformer.from_pretrained("gemma-2-9b-it", device=device)
+model = HookedTransformer.from_pretrained("gemma-2-9b-it", device=device, dtype=torch.float16)
 
 layer = 20
 sae, cfg_dict, sparsity = SAE.from_pretrained(
@@ -41,8 +41,10 @@ Question:
 
 example_prompt = "Who is the president of US?"
 
-messages = f"""<bos><start_of_turn>user
-{example_prompt}<end_of_turn>"""
+# messages = f"""<bos><start_of_turn>user
+# {example_prompt}<end_of_turn>"""
+
+messages = example_prompt
 
 example_answer = "Saint Bernadette Soubirous"
 # sampling_kwargs = dict(temperature=1.0, top_p=0.1, freq_penalty=1.0)
@@ -75,27 +77,38 @@ def hooked_generate(prompt_batch, fwd_hooks=[], max_new_tokens=200):
         input_ids = tokenized.clone()
 
         for step in range(max_new_tokens):
-            outputs = model(input_ids)
-            logits = outputs[0]  # shape: [1, seq_len, vocab_size]
-            print(f"[Step {step}] logits shape: {logits.shape}")
+            torch.cuda.empty_cache()
 
-            next_token_logits = logits[:, -1, :]
+            with torch.no_grad():
+                logits = model(input_ids) # shape: [1, seq_len, vocab_size]
+                # print(f"[Step {step}] logits shape: {logits.shape}")
+    
+                next_token_logits = logits[:, -1, :]
+                # print(f"[next_token_logits: {next_token_logits}")
 
-            next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+                target_token_logit = next_token_logits[0, torch.argmax(next_token_logits)].unsqueeze(0)
 
-            input_ids = torch.cat([input_ids, next_token], dim=-1)
+                model.zero_grad()
+                if feature_acts is not None:
+                    target_token_logit.backward()
+                    grads = feature_acts.grad  # gradient of logit w.r.t. SAE features
+                    print(f"Gradient shape: {grads.shape}")
+                    print(f"Gradient (nonzero): {grads[grads != 0]}")
 
-            if next_token.item() == model.tokenizer.eos_token_id:
-                break
+                next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+                input_ids = torch.cat([input_ids, next_token], dim=-1)
+                # print(f"[input_ids: {input_ids}")
+    
+                if next_token.item() == model.tokenizer.eos_token_id:
+                    break
                 
-    output_text = model.to_string(input_ids[0])   
-    return output_text
+    return input_ids
 
 def run_generate(messages):
     model.reset_hooks()
     editing_hooks = [(f"blocks.{layer}.hook_resid_post", sae_forward_hook)]
     res = hooked_generate(
-        [messages], editing_hooks, seed=None
+        [messages], editing_hooks
     )
 
     # Print results, removing the ugly beginning of sequence token
