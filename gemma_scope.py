@@ -15,10 +15,15 @@ from transformer_lens import HookedTransformer, utils
 from sae_lens import SAE
 from functools import partial
 from transformers import AutoTokenizer, AutoModelForCausalLM
-
+from plot import plot_activation_histogram
+from latent_meaning import get_latent_meaning
+import json
 # access_token = "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"
 
 model = HookedTransformer.from_pretrained("gemma-2-9b-it", device=device, dtype=torch.float16)
+feature_acts = None
+feature_list = []
+json_data = {}
 
 layer = 20
 sae, cfg_dict, sparsity = SAE.from_pretrained(
@@ -41,28 +46,35 @@ Question:
 
 example_prompt = "Who is the president of US?"
 
-# messages = f"""<bos><start_of_turn>user
-# {example_prompt}<end_of_turn>"""
+messages = f"""<start_of_turn>user
+{example_prompt}<end_of_turn>"""
 
-messages = example_prompt
+# messages = example_prompt
 
 example_answer = "Saint Bernadette Soubirous"
 # sampling_kwargs = dict(temperature=1.0, top_p=0.1, freq_penalty=1.0)
 
 def sae_forward_hook(activation, hook):
+    global feature_acts, feature_list
+    
     if switch:
         # Apply SAE to the activation from this hook point
         # print(hook)
         # print(f"activation: {activation.shape}")
         feature_acts = sae.encode(activation)
         feature_acts.requires_grad_(True)
+        feature_acts.retain_grad()
         print(f"feature_acts: {feature_acts.shape}")
-        # nonzero_indices = (feature_acts > 0).nonzero()
+
+        num_tokens = feature_acts.shape[1]
+        nonzero_indices = (feature_acts > 0).nonzero()
         # print("Total activated features count:", nonzero_indices.shape[0])
-        # token_features = nonzero_indices[(nonzero_indices[:, 1] == 0)]
+
+        token_features = nonzero_indices[(nonzero_indices[:, 1] == num_tokens-1)]
         # Extract the feature indices (column 2) as a list.
-        # feature_list = token_features[:, 2].tolist()
-        # print(f"Token {0} activated features: {feature_list}")
+        feature_list = token_features[:, 2].tolist()
+        # print(feature_list)
+        # print(f"Last token activated features: {feature_list}")
         
         sae_out = sae.decode(feature_acts)
         # print(f"sae_out: {sae_out.shape}")
@@ -79,28 +91,70 @@ def hooked_generate(prompt_batch, fwd_hooks=[], max_new_tokens=200):
         for step in range(max_new_tokens):
             torch.cuda.empty_cache()
 
-            with torch.no_grad():
-                logits = model(input_ids) # shape: [1, seq_len, vocab_size]
-                # print(f"[Step {step}] logits shape: {logits.shape}")
-    
-                next_token_logits = logits[:, -1, :]
-                # print(f"[next_token_logits: {next_token_logits}")
+            logits = model(input_ids) # shape: [1, seq_len, vocab_size]
+            # print(f"[Step {step}] logits shape: {logits.shape}")
 
-                target_token_logit = next_token_logits[0, torch.argmax(next_token_logits)].unsqueeze(0)
+            next_token_logits = logits[:, -1, :]
+            probs = torch.nn.functional.softmax(next_token_logits, dim=-1)
+            # print(f"[probs: {probs}")
 
-                model.zero_grad()
-                if feature_acts is not None:
-                    target_token_logit.backward()
-                    grads = feature_acts.grad  # gradient of logit w.r.t. SAE features
-                    print(f"Gradient shape: {grads.shape}")
-                    print(f"Gradient (nonzero): {grads[grads != 0]}")
+            target_token_prob = probs[0, torch.argmax(probs)].unsqueeze(0)
+            # print(target_token_prob)
 
-                next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
-                input_ids = torch.cat([input_ids, next_token], dim=-1)
-                # print(f"[input_ids: {input_ids}")
-    
-                if next_token.item() == model.tokenizer.eos_token_id:
-                    break
+            model.zero_grad()
+
+            nonzero_dict = {}
+            if feature_acts is not None:
+                target_token_prob.backward()
+                grads = feature_acts.grad  # gradient of logit w.r.t. SAE features 
+                final_grads = grads * feature_acts # shape: ([1, seq_len, 16384])
+                
+                # relu
+                relu_final_grads = torch.relu(final_grads)
+                last_token_grads = relu_final_grads[:, -1, :].squeeze(0)
+
+                nonzero_dict = {
+                    i: last_token_grads[i].item()
+                    for i in range(last_token_grads.shape[0])
+                    if last_token_grads[i] != 0
+                }
+                
+            next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+            input_ids = torch.cat([input_ids, next_token], dim=-1)
+            # print(f"[input_ids: {input_ids}")
+
+            # print 每一轮的input sequence
+            full_text = model.to_string(input_ids)[0]
+            print(f"[Step {step}] Full generated text so far: {full_text}")
+            
+            if full_text not in json_data:
+                json_data[full_text] = {
+                    "have_gradient": [],
+                    "no_gradient": []
+                }
+            print(f"Last token activated features: {feature_list}")
+            print(f"[Step {step}] last token SAE gradient features: {nonzero_dict}")
+
+            sorted_items = sorted(nonzero_dict.items(), key=lambda x: x[1])
+            for index, value in sorted_items:
+                meaning = get_latent_meaning(feature_idx=index)
+                json_data[full_text]["have_gradient"].append({
+                    "index": index,
+                    "meaning": meaning,
+                    "value": value
+                })
+                
+            for index in feature_list:
+                if index not in nonzero_dict:
+                    meaning = get_latent_meaning(feature_idx=index)
+                    json_data[full_text]["no_gradient"].append({
+                        "index": index,
+                        "meaning": meaning,
+                        "value": 0.0
+                    })
+
+            if next_token.item() == model.tokenizer.eos_token_id or next_token.item() == 107:
+                break
                 
     return input_ids
 
@@ -120,10 +174,5 @@ switch = True
 print("----------------------------------Use SAE----------------------------------")
 run_generate(messages)
 
-# Not use SAE
-switch = False
-print("----------------------------------Without SAE----------------------------------")
-run_generate(messages)
-
-
-
+with open("activation_meanings.json", "w", encoding="utf-8") as f:
+    json.dump(json_data, f, indent=2, ensure_ascii=False)
