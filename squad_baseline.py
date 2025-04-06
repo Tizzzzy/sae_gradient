@@ -7,11 +7,29 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 from tqdm import tqdm
 from datasets import load_dataset
+from gemma_generate import run_generate
+from transformer_lens import HookedTransformer, utils
+from sae_lens import SAE
+from functools import partial
+from gradsae_gemma_generate import main
+
+model = HookedTransformer.from_pretrained("gemma-2-9b-it", device="cuda", dtype=torch.float16)
+
+layer = 20
+sae, cfg_dict, sparsity = SAE.from_pretrained(
+    release = "gemma-scope-9b-it-res-canonical",
+    sae_id = f"layer_20/width_16k/canonical",
+    device="cuda",
+)
+
+hook_name = sae.cfg.hook_name
 
 # Normalization helpers
 def normalize_answer(s):
     def remove_articles(text):
-        return re.sub(r'\b(a|an|the)\b', ' ', text)
+        text = re.sub(r'\b(a|an|the)\b', ' ', text)
+        text = re.sub(f"[{re.escape(string.punctuation)}]", "", text)
+        return text
 
     def white_space_fix(text):
         return ' '.join(text.split())
@@ -51,8 +69,8 @@ def evaluate(dataset, predictions):
         total += 1
         if qid not in predictions:
             print(f"Unanswered question {qid} will receive score 0.", file=sys.stderr)
-            break
-            # continue
+            continue
+            # break
         ground_truths = item["answers"]["text"]
         prediction = predictions[qid]
         em = metric_max_over_ground_truths(exact_match_score, prediction, ground_truths)
@@ -67,28 +85,28 @@ def evaluate(dataset, predictions):
     }
 
 # Generate predictions using Gemma2-9b-it
-def generate_predictions(dataset):
-    tokenizer = AutoTokenizer.from_pretrained("google/gemma-2-9b-it")
-    model = AutoModelForCausalLM.from_pretrained(
-        "google/gemma-2-9b-it",
-        device_map="auto",
-        torch_dtype=torch.bfloat16
-    )
-
+def generate_predictions(dataset, switch):
     predictions = {}
-    for i in tqdm(range(10)):
+    all_json_data = []
+    
+    for i in tqdm(range(len(dataset))):
+    # for i in tqdm(range(10)):
         item = dataset[i]
         context = item["context"]
         question = item["question"]
-        prompt = f"""Answer the following question based on the context.\n\nContext: {context}\n\nQuestion: {question}\nAnswer:"""
-        messages = [{"role": "user", "content": prompt}]
-        input_ids = tokenizer.apply_chat_template(messages, return_tensors="pt", return_dict=True).to("cuda")
-        outputs = model.generate(**input_ids, max_new_tokens=64)
-        answer = tokenizer.decode(outputs[0])
+        prompt = f"""<start_of_turn>user\nAnswer the following question based on the context.\nContext:\n{context}\n\nQuestion:\n{question}\n\nPlease organize your final answer in this format: "Result = [[ label ]]"
+"""
+        
+        answer, json_data = main(prompt, model, layer, switch, sae)
+        answer = answer.strip()
         print(answer)
-        # Try to extract only the actual answer part
-        answer = answer.split("Answer:")[-1].strip()
         predictions[item["id"]] = answer
+        all_json_data.append(json_data)
+        
+        torch.cuda.empty_cache()
+
+    with open("activations.json", "w", encoding="utf-8") as f:
+        json.dump(all_json_data, f, indent=2, ensure_ascii=False)
     return predictions
 
 # Main
@@ -97,7 +115,7 @@ if __name__ == "__main__":
     squad = load_dataset("rajpurkar/squad", split="validation")
 
     print("Generating predictions with Gemma2-9b-it...")
-    predictions = generate_predictions(squad)
+    predictions = generate_predictions(squad, switch = True)
 
     print("Evaluating predictions...")
     results = evaluate(squad, predictions)
