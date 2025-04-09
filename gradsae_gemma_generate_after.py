@@ -112,7 +112,7 @@ def hooked_generate(prompt_batch, model, fwd_hooks=[], max_new_tokens=50, record
 def run_generate(messages, model, layer, switch, sae, gradient):
     model.reset_hooks()
     record_dict = {}
-    hook_fn = sae_forward_hook_factory(switch=switch, sae=sae, record_dict=record_dict, gradient)
+    hook_fn = sae_forward_hook_factory(switch=switch, sae=sae, record_dict=record_dict, gradient=gradient)
     editing_hooks = [(f"blocks.{layer}.hook_resid_post", hook_fn)]
     
     token_ids, input_len, output_json = hooked_generate(
