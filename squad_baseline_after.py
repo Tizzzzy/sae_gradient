@@ -11,14 +11,14 @@ from gemma_generate import run_generate
 from transformer_lens import HookedTransformer, utils
 from sae_lens import SAE
 from functools import partial
-from gradsae_gemma_generate import main
+from gradsae_gemma_generate_after import main
 
 model = HookedTransformer.from_pretrained("gemma-2-9b-it", device="cuda", dtype=torch.float16)
 
 layer = 20
 sae, cfg_dict, sparsity = SAE.from_pretrained(
     release = "gemma-scope-9b-it-res-canonical",
-    sae_id = f"layer_20/width_131k/canonical",
+    sae_id = f"layer_20/width_16k/canonical",
     device="cuda",
 )
 
@@ -85,7 +85,7 @@ def evaluate(dataset, predictions):
     }
 
 # Generate predictions using Gemma2-9b-it
-def generate_predictions(dataset, switch, data, ):
+def generate_predictions(dataset, switch, data, gradient_bool):
     predictions = {}
     all_json_data = []
     
@@ -97,12 +97,16 @@ def generate_predictions(dataset, switch, data, ):
         prompt = f"""<start_of_turn>user\nAnswer the following question based on the context.\nContext:\n{context}\n\nQuestion:\n{question}\n\nPlease organize your final answer in this format: "Result = [[ label ]]"
 """
         search = f"<bos>{prompt}"
-        if search in data:
-            original_acts = data[search]["original"]
-            gradient_acts = data[search]["have_gradient"]
-            non_grad_acts = [i for i in original_acts if i not in gradient_acts]
+        original_acts = data[search]["original"]
+        gradient_acts = data[search]["have_gradient"]
+        non_grad_acts = [i for i in original_acts if i not in gradient_acts]
+        if gradient_bool:
+            lis = non_grad_acts
+        else:
+            lis = gradient_acts
+        print(lis)
         
-        answer, json_data = main(prompt, model, layer, switch, sae)
+        answer, json_data = main(prompt, model, layer, switch, sae, lis)
         answer = answer.strip()
         print(answer)
         predictions[item["id"]] = answer
@@ -110,7 +114,7 @@ def generate_predictions(dataset, switch, data, ):
         
         torch.cuda.empty_cache()
 
-    with open("activations_after.json", "w", encoding="utf-8") as f:
+    with open("activations_after_true.json", "w", encoding="utf-8") as f:
         json.dump(all_json_data, f, indent=2, ensure_ascii=False)
     return predictions
 
@@ -121,10 +125,14 @@ if __name__ == "__main__":
 
     print("load json file")
     with open('activations.json', 'r') as file:
-        data = json.load(file)
+        data_list = json.load(file)
+
+    data = {}
+    for d in data_list:
+        data.update(d) 
 
     print("Generating predictions with Gemma2-9b-it...")
-    predictions = generate_predictions(squad, switch = True, data)
+    predictions = generate_predictions(squad, switch=True, data=data, gradient_bool=True)
 
     print("Evaluating predictions...")
     results = evaluate(squad, predictions)
