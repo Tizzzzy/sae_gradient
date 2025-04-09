@@ -44,7 +44,7 @@ def sae_forward_hook_factory(switch, sae, record_dict):
             feature_list = token_features[:, 2].tolist()
             record_dict["feature_acts"] = feature_acts
             record_dict["feature_list"] = feature_list
-        return sae.decode(feature_acts) if switch else activation
+        return sae.decode(feature_acts)
     return sae_forward_hook
 
 def hooked_generate(prompt_batch, model, fwd_hooks=[], max_new_tokens=50, record_dict=None):
@@ -67,7 +67,9 @@ def hooked_generate(prompt_batch, model, fwd_hooks=[], max_new_tokens=50, record
 
             model.zero_grad()
 
-            if record_dict and "feature_acts" in record_dict and step == 0:
+            next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+
+            if record_dict and "feature_acts" in record_dict and '[' in model.to_string(next_token.item()):
                 target_token_prob.backward()
                 grads = record_dict["feature_acts"].grad
                 final_grads = grads * record_dict["feature_acts"]
@@ -77,7 +79,7 @@ def hooked_generate(prompt_batch, model, fwd_hooks=[], max_new_tokens=50, record
                 non_zero_grads = (last_token_grads != 0).nonzero(as_tuple=True)[0].tolist()
 
                 generated_text = model.to_string(input_ids)[0]
-                output_json[generated_text] = {
+                output_json[prompt_batch[0]] = {
                     "original": record_dict["feature_list"],
                     "have_gradient": non_zero_grads
                 }
@@ -88,10 +90,9 @@ def hooked_generate(prompt_batch, model, fwd_hooks=[], max_new_tokens=50, record
                 del grads, final_grads, relu_final_grads, last_token_grads
                 torch.cuda.empty_cache()
                 
-            if step > 0 and "feature_acts" in record_dict:
+            if "feature_acts" in record_dict:
                 del record_dict["feature_acts"]
 
-            next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
             input_ids = torch.cat([input_ids, next_token], dim=-1)
             # print(f"[input_ids: {input_ids}")
     
