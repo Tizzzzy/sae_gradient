@@ -15,10 +15,10 @@ from gradsae_gemma_generate import main
 
 model = HookedTransformer.from_pretrained("gemma-2-9b-it", device="cuda", dtype=torch.float16)
 
-layer = 20
+layer = 9
 sae, cfg_dict, sparsity = SAE.from_pretrained(
     release = "gemma-scope-9b-it-res-canonical",
-    sae_id = f"layer_20/width_16k/canonical",
+    sae_id = f"layer_9/width_131k/canonical",
     device="cuda",
 )
 
@@ -61,16 +61,25 @@ def exact_match_score(prediction, ground_truth):
 def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
     return max(metric_fn(prediction, gt) for gt in ground_truths)
 
+def small_eval(prediction, ground_truths):
+    f1_val = metric_max_over_ground_truths(f1_score, prediction, ground_truths)
+    print(f1_val)
+    if f1_val >= 0.8:
+        return True
+    return False
+
 # Evaluation
 def evaluate(dataset, predictions):
     f1 = exact_match = pure_accuracy = total = 0
     for item in dataset:
         qid = item["id"]
-        total += 1
         if qid not in predictions:
             print(f"Unanswered question {qid} will receive score 0.", file=sys.stderr)
+            # continue
+            break
+        elif predictions[qid] == "None":
             continue
-            # break
+        total += 1
         ground_truths = item["answers"]["text"]
         prediction = predictions[qid]
         em = metric_max_over_ground_truths(exact_match_score, prediction, ground_truths)
@@ -89,8 +98,8 @@ def generate_predictions(dataset, switch):
     predictions = {}
     all_json_data = []
     
-    for i in tqdm(range(len(dataset))):
-    # for i in tqdm(range(10)):
+    # for i in tqdm(range(len(dataset))):
+    for i in tqdm(range(10)):
         item = dataset[i]
         context = item["context"]
         question = item["question"]
@@ -100,13 +109,18 @@ def generate_predictions(dataset, switch):
         answer, json_data = main(prompt, model, layer, switch, sae)
         answer = answer.strip()
         print(answer)
-        predictions[item["id"]] = answer
-        all_json_data.append(json_data)
+        if small_eval(answer, item["answers"]["text"]):
+            predictions[item["id"]] = answer
+            all_json_data.append(json_data)
+        else:
+            print("not correct")
+            predictions[item["id"]] = "None"
         
         torch.cuda.empty_cache()
 
-    with open("activations.json", "w", encoding="utf-8") as f:
+    with open("activations2.json", "w", encoding="utf-8") as f:
         json.dump(all_json_data, f, indent=2, ensure_ascii=False)
+    print(predictions)
     return predictions
 
 # Main
