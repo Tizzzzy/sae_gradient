@@ -64,7 +64,7 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
 def small_eval(prediction, ground_truths):
     f1_val = metric_max_over_ground_truths(f1_score, prediction, ground_truths)
     print(f1_val)
-    if f1_val >= 0.8:
+    if f1_val >= 0.9:
         return True
     return False
 
@@ -75,8 +75,8 @@ def evaluate(dataset, predictions):
         qid = item["id"]
         if qid not in predictions:
             print(f"Unanswered question {qid} will receive score 0.", file=sys.stderr)
-            # continue
-            break
+            continue
+            # break
         elif predictions[qid] == "None":
             continue
         total += 1
@@ -98,8 +98,8 @@ def generate_predictions(dataset, switch):
     predictions = {}
     all_json_data = []
     
-    # for i in tqdm(range(len(dataset))):
-    for i in tqdm(range(10)):
+    for i in tqdm(range(len(dataset))):
+    # for i in tqdm(range(1000)):
         item = dataset[i]
         context = item["context"]
         question = item["question"]
