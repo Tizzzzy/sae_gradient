@@ -7,7 +7,6 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 from tqdm import tqdm
 from datasets import load_dataset
-from gemma_generate import run_generate
 from transformer_lens import HookedTransformer, utils
 from sae_lens import SAE
 from functools import partial
