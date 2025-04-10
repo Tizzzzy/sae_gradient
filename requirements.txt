@@ -1,2 +1,2 @@
-transformer-lens
-sae-lens
+transformer-lens==2.15.0
+sae-lens==5.8.1
