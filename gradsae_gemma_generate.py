@@ -69,25 +69,53 @@ def hooked_generate(prompt_batch, model, fwd_hooks=[], max_new_tokens=50, record
 
             next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
 
+            # if record_dict and "feature_acts" in record_dict and '[' in model.to_string(next_token.item()):
+            #     target_token_prob.backward()
+            #     grads = record_dict["feature_acts"].grad
+            #     final_grads = grads * record_dict["feature_acts"]
+
+            #     relu_final_grads = torch.relu(final_grads)
+            #     last_token_grads = relu_final_grads[:, -1, :].squeeze(0)
+            #     non_zero_grads = (last_token_grads != 0).nonzero(as_tuple=True)[0].tolist()
+
+            #     generated_text = model.to_string(input_ids)[0]
+            #     output_json[prompt_batch[0]] = {
+            #         "original": record_dict["feature_list"],
+            #         "have_gradient": non_zero_grads
+            #     }
+
+            #     # clean cuda
+            #     record_dict["feature_acts"].grad = None
+            #     del record_dict["feature_acts"]
+            #     del grads, final_grads, relu_final_grads, last_token_grads
+            #     torch.cuda.empty_cache()
+
             if record_dict and "feature_acts" in record_dict and '[' in model.to_string(next_token.item()):
                 target_token_prob.backward()
                 grads = record_dict["feature_acts"].grad
                 final_grads = grads * record_dict["feature_acts"]
 
                 relu_final_grads = torch.relu(final_grads)
-                last_token_grads = relu_final_grads[:, -1, :].squeeze(0)
-                non_zero_grads = (last_token_grads != 0).nonzero(as_tuple=True)[0].tolist()
+                # last_token_grads = relu_final_grads[:, -1, :].squeeze(0)
+                column_mean_grads = relu_final_grads.mean(dim=1).squeeze(0)
+                num_features = len(record_dict["feature_list"])
+                top_k = num_features // 2
 
+                sorted_indices = torch.argsort(column_mean_grads, descending=True)
+                top_indices = sorted_indices[:top_k].tolist()
+                bottom_indices = sorted_indices[-top_k:].tolist()
+                
                 generated_text = model.to_string(input_ids)[0]
                 output_json[prompt_batch[0]] = {
                     "original": record_dict["feature_list"],
-                    "have_gradient": non_zero_grads
+                    "have_gradient": top_indices,
+                    "no_gradient": bottom_indices
                 }
 
                 # clean cuda
                 record_dict["feature_acts"].grad = None
                 del record_dict["feature_acts"]
-                del grads, final_grads, relu_final_grads, last_token_grads
+                del grads, final_grads, relu_final_grads, column_mean_grads
                 torch.cuda.empty_cache()
                 
             if "feature_acts" in record_dict:
