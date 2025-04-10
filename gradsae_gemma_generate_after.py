@@ -47,9 +47,9 @@ def sae_forward_hook_factory(switch, sae, record_dict, gradient):
                 if i in feature_list:
                     feature_list.remove(i)
                 # Zero out the feature activation
-                print(i, feature_acts[:, -1, i])
-                feature_acts[:, -1, i] = -abs(feature_acts[:, -1, i])
-                print(i, feature_acts[:, -1, i])
+                # print(i, feature_acts[:, -1, i])
+                feature_acts[:, :, i] = 0.0
+                # print(i, feature_acts[:, -1, i])
                     
             record_dict["feature_acts"] = feature_acts
             record_dict["feature_list"] = feature_list
