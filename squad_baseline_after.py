@@ -11,14 +11,14 @@ from gemma_generate import run_generate
 from transformer_lens import HookedTransformer, utils
 from sae_lens import SAE
 from functools import partial
-from gradsae_gemma_generate_after2 import main
+from gradsae_gemma_generate_after import main
 
 model = HookedTransformer.from_pretrained("gemma-2-9b-it", device="cuda", dtype=torch.float16)
 
-layer = 20
+layer = 9
 sae, cfg_dict, sparsity = SAE.from_pretrained(
     release = "gemma-scope-9b-it-res-canonical",
-    sae_id = f"layer_20/width_16k/canonical",
+    sae_id = f"layer_9/width_131k/canonical",
     device="cuda",
 )
 
@@ -105,7 +105,8 @@ def generate_predictions(dataset, switch, data, gradient_bool):
             
         original_acts = data[search]["original"]
         gradient_acts = data[search]["have_gradient"]
-        non_grad_acts = [i for i in original_acts if i not in gradient_acts]
+        # non_grad_acts = [i for i in original_acts if i not in gradient_acts]
+        non_grad_acts = data[search]["no_gradient"]
         if gradient_bool:
             lis = non_grad_acts
         else:
@@ -120,7 +121,7 @@ def generate_predictions(dataset, switch, data, gradient_bool):
         
         torch.cuda.empty_cache()
 
-    with open("activations_after_true2.json", "w", encoding="utf-8") as f:
+    with open("activations_after_true.json", "w", encoding="utf-8") as f:
         json.dump(all_json_data, f, indent=2, ensure_ascii=False)
     print(predictions)
     return predictions
@@ -139,7 +140,7 @@ if __name__ == "__main__":
         data.update(d) 
 
     print("Generating predictions with Gemma2-9b-it...")
-    predictions = generate_predictions(squad, switch=True, data=data, gradient_bool=False)
+    predictions = generate_predictions(squad, switch=True, data=data, gradient_bool=True)
 
     print("Evaluating predictions...")
     results = evaluate(squad, predictions)
