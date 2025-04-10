@@ -68,8 +68,8 @@ def evaluate(dataset, predictions):
         qid = item["id"]
         if qid not in predictions:
             print(f"Unanswered question {qid} will receive score 0.", file=sys.stderr)
-            # continue
-            break
+            continue
+            # break
         elif predictions[qid] == "None":
             continue
         total += 1
@@ -91,8 +91,8 @@ def generate_predictions(dataset, switch, data, gradient_bool):
     predictions = {}
     all_json_data = []
     
-    # for i in tqdm(range(len(dataset))):
-    for i in tqdm(range(10)):
+    for i in tqdm(range(len(dataset))):
+    # for i in tqdm(range(10)):
         item = dataset[i]
         context = item["context"]
         question = item["question"]
@@ -132,7 +132,7 @@ if __name__ == "__main__":
     squad = load_dataset("rajpurkar/squad", split="validation")
 
     print("load json file")
-    with open('activations2.json', 'r') as file:
+    with open('activations_mean.json', 'r') as file:
         data_list = json.load(file)
 
     data = {}
