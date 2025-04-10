@@ -12,6 +12,9 @@ from transformer_lens import HookedTransformer, utils
 from sae_lens import SAE
 from functools import partial
 from gradsae_gemma_generate_after import main
+from huggingface_hub import login
+
+login(token="your_token") # Replace "your_token" with your actual token
 
 model = HookedTransformer.from_pretrained("gemma-2-9b-it", device="cuda", dtype=torch.float16)
 
