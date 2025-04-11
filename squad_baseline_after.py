@@ -74,8 +74,8 @@ def evaluate(dataset, predictions):
         if qid not in predictions:
             print(f"Unanswered question {qid} will receive score 0.", file=sys.stderr)
             total += 1
-            continue
-            # break
+            # continue
+            break
         elif predictions[qid] == "None":
             continue
         total += 1
@@ -94,44 +94,56 @@ def evaluate(dataset, predictions):
 
 # Generate predictions using Gemma2-9b-it
 def generate_predictions(dataset, switch, data, gradient_bool):
-    predictions = {}
     all_json_data = []
-    
-    for i in tqdm(range(len(dataset))):
-    # for i in tqdm(range(1000)):
-        item = dataset[i]
-        context = item["context"]
-        question = item["question"]
-        prompt = f"""<start_of_turn>user\nAnswer the following question based on the context.\nContext:\n{context}\n\nQuestion:\n{question}\n\nPlease organize your final answer in this format: "Result = [[ label ]]"
-"""
-        search = prompt
-        if search not in data:
-            predictions[item["id"]] = "None"
-            continue
+
+    with open("predictions.jsonl", "a", encoding="utf-8") as pred_file:
+        predictions = {}
+        with open("predictions.jsonl", "r", encoding="utf-8") as f:
+            for line in f:
+                predictions.update(json.loads(line))
+        print(predictions)
+        for i in tqdm(range(len(dataset))):
+        # for i in tqdm(range(20)):
+            item = dataset[i]
+            context = item["context"]
+            question = item["question"]
+            if item["id"] in predictions:
+                continue
             
-        original_acts = data[search]["original"]
-        gradient_acts = data[search]["have_gradient"]
-        # non_grad_acts = [i for i in original_acts if i not in gradient_acts]
-        non_grad_acts = data[search]["no_gradient"]
-        if gradient_bool:
-            lis = non_grad_acts
-        else:
-            lis = gradient_acts
-        print(lis)
+            prompt = f"""<start_of_turn>user\nAnswer the following question based on the context.\nContext:\n{context}\n\nQuestion:\n{question}\n\nPlease organize your final answer in this format: "Result = [[ label ]]"
+"""
+            search = prompt
+            if search not in data:
+                predictions[item["id"]] = "None"
+                continue
+                
+            original_acts = data[search]["original"]
+            gradient_acts = data[search]["have_gradient"]
+            # non_grad_acts = [i for i in original_acts if i not in gradient_acts]
+            non_grad_acts = data[search]["no_gradient"]
+            if gradient_bool:
+                lis = non_grad_acts
+            else:
+                lis = gradient_acts
+            print(lis)
+    
+            try:
+                answer, json_data = main(prompt, model, layer, switch, sae, lis)
+                answer = answer.strip()
+                # print(answer)
+                predictions[item["id"]] = answer
+                all_json_data.append(json_data)
 
-        try:
-            answer, json_data = main(prompt, model, layer, switch, sae, lis)
-            answer = answer.strip()
-            # print(answer)
-            predictions[item["id"]] = answer
-            all_json_data.append(json_data)
-        except Exception as e:
-            print(e)
-        
-        torch.cuda.empty_cache()
+                json.dump({item["id"]: answer}, pred_file, ensure_ascii=False)
+                pred_file.write('\n')
+                
+            except Exception as e:
+                print(e)
+            
+            torch.cuda.empty_cache()
 
-    with open("activations_after_true.json", "w", encoding="utf-8") as f:
-        json.dump(all_json_data, f, indent=2, ensure_ascii=False)
+    # with open("activations_after_true.json", "w", encoding="utf-8") as f:
+    #     json.dump(all_json_data, f, indent=2, ensure_ascii=False)
     print(predictions)
     return predictions
 
@@ -150,6 +162,11 @@ if __name__ == "__main__":
 
     print("Generating predictions with Gemma2-9b-it...")
     predictions = generate_predictions(squad, switch=True, data=data, gradient_bool=True)
+
+    predictions = {}
+    with open("predictions.jsonl", "r", encoding="utf-8") as f:
+        for line in f:
+            predictions.update(json.loads(line))
 
     print("Evaluating predictions...")
     results = evaluate(squad, predictions)
