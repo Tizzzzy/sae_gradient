@@ -62,9 +62,7 @@ def hooked_generate(prompt_batch, model, fwd_hooks=[], max_new_tokens=50, record
 
             next_token_logits = logits[:, -1, :]
             # print(f"[next_token_logits: {next_token_logits}")
-            probs = torch.nn.functional.softmax(next_token_logits, dim=-1)
-            target_token_prob = probs[0, torch.argmax(probs)].unsqueeze(0)
-
+            
             model.zero_grad()
 
             next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
