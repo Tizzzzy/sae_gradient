@@ -73,6 +73,7 @@ def evaluate(dataset, predictions):
         qid = item["id"]
         if qid not in predictions:
             print(f"Unanswered question {qid} will receive score 0.", file=sys.stderr)
+            total += 1
             continue
             # break
         elif predictions[qid] == "None":
@@ -97,7 +98,7 @@ def generate_predictions(dataset, switch, data, gradient_bool):
     all_json_data = []
     
     for i in tqdm(range(len(dataset))):
-    # for i in tqdm(range(10)):
+    # for i in tqdm(range(1000)):
         item = dataset[i]
         context = item["context"]
         question = item["question"]
@@ -117,12 +118,15 @@ def generate_predictions(dataset, switch, data, gradient_bool):
         else:
             lis = gradient_acts
         print(lis)
-        
-        answer, json_data = main(prompt, model, layer, switch, sae, lis)
-        answer = answer.strip()
-        # print(answer)
-        predictions[item["id"]] = answer
-        all_json_data.append(json_data)
+
+        try:
+            answer, json_data = main(prompt, model, layer, switch, sae, lis)
+            answer = answer.strip()
+            # print(answer)
+            predictions[item["id"]] = answer
+            all_json_data.append(json_data)
+        except Exception as e:
+            print(e)
         
         torch.cuda.empty_cache()
 
