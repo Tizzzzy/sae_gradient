@@ -12,6 +12,11 @@ from sae_lens import SAE
 from functools import partial
 from gradsae_baseline import main
 
+# with open("token.txt", "r") as f:
+#     token = f.read().strip()
+
+# login(token=token)
+
 model = HookedTransformer.from_pretrained("gemma-2-9b-it", device="cuda", dtype=torch.float16)
 
 layer = 9
@@ -98,7 +103,7 @@ def generate_predictions(dataset, switch):
     all_json_data = []
     
     for i in tqdm(range(len(dataset))):
-    # for i in tqdm(range(1000)):
+    # for i in tqdm(range(10)):
         item = dataset[i]
         context = item["context"]
         question = item["question"]
