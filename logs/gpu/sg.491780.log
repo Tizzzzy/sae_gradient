@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/mmfs1/project/md748/shudong/sae_gradient/baseline/baseline.py", line 15, in <module>
+    with open("../token.txt", "r") as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '../token.txt'
+srun: error: n1541: task 0: Exited with exit code 1

@@ -12,7 +12,7 @@ from sae_lens import SAE
 from functools import partial
 from gradsae_baseline import main
 
-with open("../token.txt", "r") as f:
+with open("token.txt", "r") as f:
     token = f.read().strip()
 
 login(token=token)
