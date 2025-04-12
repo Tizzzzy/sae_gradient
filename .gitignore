@@ -1,2 +1,6 @@
-**token.txt
-**.json
+token.txt
+baseline/token.txt
+*.json
+logs/*
+*.sh
+*__pycache__
