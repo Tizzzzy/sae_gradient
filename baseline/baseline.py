@@ -11,6 +11,7 @@ from transformer_lens import HookedTransformer, utils
 from sae_lens import SAE
 from functools import partial
 from gradsae_baseline import main
+from huggingface_hub import login
 
 with open("token.txt", "r") as f:
     token = f.read().strip()
