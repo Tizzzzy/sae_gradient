@@ -103,8 +103,8 @@ def generate_predictions(dataset, switch):
     predictions = {}
     all_json_data = []
     
-    for i in tqdm(range(len(dataset))):
-    # for i in tqdm(range(2)):
+    # for i in tqdm(range(len(dataset))):
+    for i in tqdm(range(3000)):
         item = dataset[i]
         context = item["context"]
         question = item["question"]
