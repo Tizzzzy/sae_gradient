@@ -23,7 +23,7 @@ model = HookedTransformer.from_pretrained("gemma-2-9b-it", device="cuda", dtype=
 layer = 9
 sae, cfg_dict, sparsity = SAE.from_pretrained(
     release = "gemma-scope-9b-it-res-canonical",
-    sae_id = f"layer_9/width_16k/canonical",
+    sae_id = f"layer_9/width_131k/canonical",
     device="cuda",
 )
 
