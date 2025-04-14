@@ -69,8 +69,7 @@ def hooked_generate(prompt_batch, model, fwd_hooks=[], max_new_tokens=50, record
 
             next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
 
-            # if record_dict and "feature_acts" in record_dict and '[' in model.to_string(next_token.item()):
-            if record_dict and "feature_acts" in record_dict:
+            if record_dict and "feature_acts" in record_dict and '[' in model.to_string(next_token.item()):
                 target_token_prob.backward()
                 grads = record_dict["feature_acts"].grad
                 final_grads = grads * record_dict["feature_acts"]
