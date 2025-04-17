@@ -11,8 +11,14 @@ from transformer_lens import HookedTransformer, utils
 from sae_lens import SAE
 from functools import partial
 from gradsae import main
+from huggingface_hub import login
 import random
 random.seed(42)
+
+with open("token.txt", "r") as f:
+    token = f.read().strip()
+
+login(token=token)
 
 model = HookedTransformer.from_pretrained("gemma-2-9b-it", device="cuda", dtype=torch.float16)
 
