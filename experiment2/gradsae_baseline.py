@@ -102,7 +102,7 @@ def hooked_generate(prompt_batch, model, fwd_hooks=[], max_new_tokens=50, record
                 # clean cuda
                 record_dict["feature_acts"].grad = None
                 del record_dict["feature_acts"]
-                del grads, final_grads, relu_final_grads, column_mean_grads
+                del column_mean_grads
                 torch.cuda.empty_cache()
                 
             if "feature_acts" in record_dict:
