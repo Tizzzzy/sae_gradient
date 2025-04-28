@@ -156,7 +156,7 @@ if __name__ == "__main__":
     squad = load_dataset("rajpurkar/squad", split="validation")
 
     print("load json file")
-    with open('filtered_steered_data.json', 'r') as file:
+    with open('steered_data.json', 'r') as file:
         data = json.load(file)
 
 
