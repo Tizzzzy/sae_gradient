@@ -12,6 +12,8 @@ from sae_lens import SAE
 from functools import partial
 from gradsae_steer import main
 from huggingface_hub import login
+import random
+random.seed(42)
 
 with open("token.txt", "r") as f:
     token = f.read().strip()
@@ -70,33 +72,26 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
 
 # Evaluation
 def evaluate(predictions):
-    original_f1 = steer_f1 = original_exact_match = steer_exact_match = total = 0
+    steer_f1 = steer_exact_match = total = 0
     for key, value in predictions.items():
 
-        total += 1
-        original_ground_truth = value["original"]
         steer_ground_truth = value["steer"]
         prediction = value["prediction"]
 
-        if not original_ground_truth or not steer_ground_truth:
+        if not steer_ground_truth:
             print(f"Skipping item {key} due to missing ground truth.")
             continue
-        
-        original_em = metric_max_over_ground_truths(exact_match_score, prediction, original_ground_truth)
+            
+        total += 1
         steer_em = metric_max_over_ground_truths(exact_match_score, prediction, steer_ground_truth)
         
-        original_f1_val = metric_max_over_ground_truths(f1_score, prediction, original_ground_truth)
         steer_f1_val = metric_max_over_ground_truths(f1_score, prediction, steer_ground_truth)
         
-        original_exact_match += original_em
         steer_exact_match += steer_em
         
-        original_f1 += original_f1_val
         steer_f1 += steer_f1_val
     return {
-        'original_exact_match': 100.0 * original_exact_match / total,
         'steer_exact_match': 100.0 * steer_exact_match / total,
-        'original_f1': 100.0 * original_f1 / total,
         'steer_f1': 100.0 * steer_f1 / total,
     }
             
@@ -112,8 +107,10 @@ def generate_predictions(dataset, switch, data, gradient_bool):
             for line in f:
                 predictions.update(json.loads(line))
         print(predictions)
-        # for i in tqdm(range(len(dataset))):
-        for i in tqdm(range(1000)):
+        
+        indices = list(range(len(dataset)))
+
+        for i in indices:
             item = dataset[i]
             context = item["context"]
             question = item["question"]
@@ -127,14 +124,12 @@ def generate_predictions(dataset, switch, data, gradient_bool):
                 continue
 
             try:
-                original_acts = data[search]["original"]
                 original_gradient_acts = data[search]["have_gradient"]
                 original_non_grad_acts = data[search]["no_gradient"]
                 
                 steer_gradient_acts = data[search]["steer_have_gradient"]
                 steer_non_grad_acts = data[search]["steer_no_gradient"]
     
-                original_ground_truth = data[search]["ground_truth"]
                 steer_ground_truth = data[search]["steer_ground_truth"]
                 
                 if gradient_bool:
@@ -146,42 +141,17 @@ def generate_predictions(dataset, switch, data, gradient_bool):
     
                 answer, json_data = main(prompt, model, layer, switch, sae, original, steer)
                 answer = answer.strip()
-                print(answer)
                 predictions[item["id"]] = {
                     "prediction": answer,
-                    "original": original_ground_truth,
                     "steer": steer_ground_truth
                 }
-                # all_json_data.append(json_data)
-    
-                # json.dump({item["id"]: predictions[item["id"]]}, pred_file)
-                # pred_file.write('\n')
+
 
             except Exception as e:
-                print(f"error: {e}")
-                
-            # try:
-            #     answer, json_data = main(prompt, model, layer, switch, sae, original, steer)
-            #     answer = answer.strip()
-            #     # print(answer)
-            #     predictions[item["id"]]["prediction"] = answer
-            #     predictions[item["id"]]["original"] = original_ground_truth
-            #     predictions[item["id"]]["steer"] = steer_ground_truth
-            #     all_json_data.append(json_data)
-
-            #     json.dump({item["id"]: {
-            #         "prediction": answer,
-            #         "original": original_ground_truth,
-            #         "steer": steer_ground_truth
-            #     }}, pred_file)
-            #     pred_file.write('\n')
-                
-            # except Exception as e:
-            #     print(f"error: {e}")
+                continue
             
             torch.cuda.empty_cache()
 
-    print(predictions)
     return predictions
 
 # Main
@@ -190,17 +160,13 @@ if __name__ == "__main__":
     squad = load_dataset("rajpurkar/squad", split="validation")
 
     print("load json file")
-    with open('steered_data.json', 'r') as file:
+    with open('filtered_steered_data.json', 'r') as file:
         data = json.load(file)
 
 
     print("Generating predictions with Gemma2-9b-it...")
     predictions = generate_predictions(squad, switch=True, data=data, gradient_bool=False)
 
-    # predictions = {}
-    # with open(prediction_file, "r", encoding="utf-8") as f:
-    #     for line in f:
-    #         predictions.update(json.loads(line))
 
     print("Evaluating predictions...")
     results = evaluate(predictions)
