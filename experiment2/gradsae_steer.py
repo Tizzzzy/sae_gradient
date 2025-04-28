@@ -44,13 +44,9 @@ def sae_forward_hook_factory(switch, sae, record_dict, original, steer):
             feature_list = token_features[:, 2].tolist()
 
             for key, value in original.items():
-            #     print(int(key), feature_acts[:, :, int(key)])
-                feature_acts[:, :, int(key)] = 0.0
-            #     print(int(key), feature_acts[:, :, int(key)])
+                feature_acts[:, -1, int(key)] = 0.0
             for key, value in steer.items():
-                # print(int(key), feature_acts[:, :, int(key)])
-                feature_acts[:, :, int(key)] = float(value)
-                # print(int(key), feature_acts[:, :, int(key)])
+                feature_acts[:, -1, int(key)] = torch.clamp(torch.tensor(value, device=feature_acts.device), min=0.0, max=50.0)
                 
             record_dict["feature_acts"] = feature_acts
         return sae.decode(feature_acts)
