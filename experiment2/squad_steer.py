@@ -132,12 +132,8 @@ def generate_predictions(dataset, switch, data, gradient_bool):
     
                 steer_ground_truth = data[search]["steer_ground_truth"]
                 
-                if gradient_bool:
-                    original = original_non_grad_acts
-                    steer = steer_non_grad_acts
-                else:
-                    original = original_gradient_acts
-                    steer = steer_gradient_acts
+                original = original_gradient_acts
+                steer = steer_gradient_acts
     
                 answer, json_data = main(prompt, model, layer, switch, sae, original, steer)
                 answer = answer.strip()
