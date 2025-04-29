@@ -27,4 +27,25 @@ This experiment designed to answer **RQ3** from our paper:
    **Expected Outcome:**  
    Due to the inherent randomness in both the SAE and LLM decoding, your results may not exactly match those reported in the paper. However, the value should be close.
 
+## Note
+In the current implementation, we zero out the TopK original latents and inject the steering latents **at the last token position**.  
+This is handled in `gradsae_steer.py` (lines 46–49) as shown below:
+``` python
+for key, value in original.items():
+    feature_acts[:, -1, int(key)] = 0.0
+for key, value in steer.items():
+    feature_acts[:, -1, int(key)] = torch.clamp(torch.tensor(value, device=feature_acts.device), min=0.0, max=50.0)
+```
+However, there are many possible variations you can experiment with:
+
+1. Instead of only editing the last token `feature_acts[:, -1, int(key)]`, you can apply changes across the entire sequence:
+``` python
+feature_acts[:, :, int(key)] = 0.0  # or set to other values
+```
+2. Rather than directly setting the latent to the steering value, you can amplify its influence by scaling:
+``` python
+scale = 100
+feature_acts[:, -1, int(key)] = torch.clamp(torch.tensor(value * scale, device=feature_acts.device), min=0.0, max=50.0)
+```
+
 ---
