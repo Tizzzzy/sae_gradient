@@ -24,7 +24,7 @@ We recommend starting with **`Experiment1`** before proceeding to other experime
 
 ## 🔑 Key Module
 
-The core logic for gradient-based latent selection is implemented in the `hooked_generate()` function inside `gradsae.py` (starting around line 50).
+The core logic for gradient-based latent selection is implemented in the `hooked_generate()` function inside `experiment1/gradsae.py` (starting around line 50).
 
 When the LLM is about to output the correct answer, we compute the gradient of the output probability with respect to the SAE activations:
 
