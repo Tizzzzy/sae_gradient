@@ -2,20 +2,21 @@
 
 This is the official repo for paper GradSAE
 
-![image](https://github.com/user-attachments/assets/829338fd-28b0-45a2-be2f-a13d2422fedc)
+![image](https://github.com/user-attachments/assets/174c49d7-0eae-45c7-b572-05a467e13919)
+
 
 ---
 
 ## 📚 Introduction
 
-This repository contains three main folders: `Baseline`, `Experiment1`, and `Experiment2`.
+This repository contains three main folders: `Baseline`, `Experiment1 (Perturbation)`, and `Experiment2 (Local Steering)`.
 
 The core insight of GradSAE is that **not all latents activated by the input contribute equally to the model’s output**.  
 Only those latents whose activations exhibit **high gradient** with respect to the probability of the desired output label are likely to significantly influence the model's behavior.
 
 Since gradient computation is required, our experiments are organized in multiple rounds:
-- **Round 1:** Calculate the gradient with respect to the correct label and extract the TopK and BottomK influential latents.
-- **Following Rounds:** Mask the identified TopK or BottomK latents and evaluate their effect on downstream tasks.
+- **Round 1:** Calculate the gradient with respect to the correct label and extract the TopK and BottomK influential latents (See Figure a GradSAE Framework).
+- **Following Rounds:** Mask the identified TopK or BottomK latents and evaluate their effect on downstream tasks (See Figure b Perturbation Experiment).
 
 Detailed instructions for running each experiment are provided inside each folder’s individual `README`.  
 We recommend starting with **`Experiment1`** before proceeding to other experiments.
